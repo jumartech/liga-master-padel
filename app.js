@@ -1461,6 +1461,20 @@ document.getElementById('accesoClave').addEventListener('keydown', function (e) 
   if (e.key === 'Enter') document.getElementById('accesoBtn').click();
 });
 
+// "Salir" (pestaña Más): borra el acceso guardado en este dispositivo
+// (de jugador y, si había, también la sesión de admin) y vuelve a la
+// pantalla de contraseña.
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('[data-salir]')) return;
+  borrarAcceso_();
+  if (typeof adminLeerSesion_ === 'function' && adminLeerSesion_()) {
+    rpc('admin_logout', { p_sesion: adminLeerSesion_() }).catch(function () {});
+    adminBorrarSesion_();
+  }
+  try { history.replaceState(null, '', location.pathname); } catch (err) { /* no crítico */ }
+  location.reload();
+});
+
 // Abre la web "de jugador" (la usa también el botón "Ver la web" del panel).
 var appArrancada_ = false;
 function abrirWebJugador_() {
