@@ -310,7 +310,7 @@ function admSlotReserva_(x) {
   return '<button class="adm-slot" data-adm-rsv-ver="' + esc_(x.idReserva) + '">' +
     '<div class="adm-slot-time">' + esc_(x.horarioInicio) + '<small>Cancha ' + esc_(x.cancha || '?') + '</small></div>' +
     '<div class="adm-slot-body"><b>' + esc_(x.parejaA || x.nombreSolicitante) + (x.parejaB ? ' <i style="font-style:normal;color:var(--text-faint)">vs</i> ' + esc_(x.parejaB) : '') + '</b>' +
-    '<span class="adm-row-l">' + (x.categoria ? '<span class="adm-faint">' + esc_(x.categoria) + '</span>' : '') + admPill_(x.estadoReserva) + admPagoPill_(x) + '</span></div></button>';
+    '<span class="adm-row-l">' + (x.categoria ? '<span class="adm-faint">' + esc_(admCatFecha_(x)) + '</span>' : '') + admPill_(x.estadoReserva) + admPagoPill_(x) + '</span></div></button>';
 }
 document.addEventListener('click', function (e) {
   var t;
@@ -350,7 +350,7 @@ document.addEventListener('click', function (e) {
 // ============================================================
 // RESERVAS
 // ============================================================
-var ADM_FILTROS_RSV_ = [['pendientes', 'Para aprobar'], ['proximas', 'Próximas'], ['saldo', 'Con saldo'], ['pasadas', 'Pasadas'], ['todas', 'Todas']];
+var ADM_FILTROS_RSV_ = [['pendientes', 'Para aprobar'], ['proximas', 'Próximas'], ['saldo', 'Con saldo'], ['sinresultado', 'Sin resultado'], ['pasadas', 'Pasadas'], ['todas', 'Todas']];
 function admVistaReservas_() {
   var v = admView_();
   v.innerHTML = '<div class="adm-head"><h1 class="adm-h1">Reservas</h1><button class="adm-btn primary sm" data-adm-rsv-nueva>+ Cargar reserva</button></div>' +
@@ -368,12 +368,22 @@ function admCargarReservas_() {
     ADM.rsvLista = lista;
     if (ADM.rsvFiltro === 'pendientes') admActualizarBadge_(lista.length);
     if (!lista.length) {
-      cont.innerHTML = '<div class="adm-empty">' + (ADM.rsvFiltro === 'pendientes' ? 'No hay reservas esperando aprobación.' : 'No hay reservas para mostrar.') + '</div>';
+      cont.innerHTML = '<div class="adm-empty">' + (ADM.rsvFiltro === 'pendientes' ? 'No hay reservas esperando aprobación.' : ADM.rsvFiltro === 'sinresultado' ? 'No hay partidos pasados sin resultado.' : 'No hay reservas para mostrar.') + '</div>';
       return;
     }
     cont.innerHTML = lista.slice(0, 200).map(admCardReserva_).join('') +
       (lista.length > 200 ? '<div class="adm-faint">Mostrando 200 de ' + lista.length + '. Usá el buscador para encontrar otras.</div>' : '');
   }).catch(function (err) { cont.innerHTML = '<div class="adm-empty">' + esc_(err.message) + '</div>'; });
+}
+// "Cat. A · Fecha 3" (la fecha del fixture a la que pertenece el partido).
+function admCatFecha_(r) {
+  if (!r.categoria) return 'Turno libre (sin partido)';
+  return r.categoria + (r.fechaPartido ? ' · Fecha ' + r.fechaPartido : '');
+}
+// Ya pasó el día, era un partido de la liga y nunca se cargó resultado
+// (por ejemplo, se suspendió por lluvia).
+function admSinResultado_(r) {
+  return r.estadoReserva === 'FINALIZADO' && !!r.idPartido && !r.partidoJugado;
 }
 function admCardReserva_(r) {
   var id = esc_(r.idReserva);
@@ -387,17 +397,22 @@ function admCardReserva_(r) {
   }
   if (activa && !pend && r.montoPagado < r.valorTotal) acciones.push('<button class="adm-btn sm primary" data-adm-rsv-cobrar="' + id + '">Cobró el saldo</button>');
   if (activa) acciones.push('<button class="adm-btn sm" data-adm-rsv-editar="' + id + '">Editar</button>');
-  if (r.estadoReserva === 'RESERVADO' || pend) acciones.push('<button class="adm-btn sm danger" data-adm-rsv-accion="cancelar" data-id="' + id + '">Cancelar</button>');
+  var sinRes = admSinResultado_(r);
+  if (r.estadoReserva === 'RESERVADO' || pend || (r.estadoReserva === 'FINALIZADO' && !r.partidoJugado)) {
+    acciones.push('<button class="adm-btn sm danger" data-adm-rsv-accion="cancelar" data-id="' + id + '">' + (sinRes ? 'No se jugó · cancelar' : 'Cancelar') + '</button>');
+  }
   if (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO') acciones.push('<button class="adm-btn sm" data-adm-rsv-accion="reactivar" data-id="' + id + '">Reactivar</button>');
   var wa = admWaLink_(r);
   if (wa) acciones.push('<a class="adm-btn sm wa" href="' + esc_(wa) + '" target="_blank" rel="noopener">WhatsApp</a>');
 
-  return '<div class="adm-card' + (pend ? ' warn' : '') + (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO' ? ' off' : '') + '" data-adm-card="' + id + '">' +
+  return '<div class="adm-card' + (pend || sinRes ? ' warn' : '') + (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO' ? ' off' : '') + '" data-adm-card="' + id + '">' +
+    '<div class="adm-rsv-cat">' + esc_(admCatFecha_(r)) + '</div>' +
+    (sinRes ? '<div class="adm-rsv-aviso">Ya pasó y no tiene resultado cargado. Si no se jugó (lluvia, etc.), cancelala y el partido vuelve a quedar disponible para reservar.</div>' : '') +
     '<div class="adm-row wrap"><div class="adm-row-l"><b>' + esc_(admFecha_(r.fecha, r.diaSemana)) + ' · ' + esc_(r.horarioInicio) + '-' + esc_(r.horarioFin) + '</b>' +
       '<span class="adm-muted">Cancha ' + esc_(r.cancha || '?') + '</span></div>' +
       '<div class="adm-row-l">' + admPill_(r.estadoReserva) + admPagoPill_(r) + '</div></div>' +
     (r.parejaA ? '<div class="adm-vs">' + esc_(r.parejaA) + '<i>vs</i>' + esc_(r.parejaB) + '</div>' : '') +
-    '<div class="adm-kv"><span>' + esc_(r.categoria || 'Sin categoría') + (r.idPartido ? ' · ' + esc_(r.idPartido) : '') + '</span><b>' + esc_(r.idReserva) + ' · ' + esc_(r.codigoReserva) + '</b></div>' +
+    '<div class="adm-kv"><span>' + (r.idPartido ? 'Partido ' + esc_(r.idPartido) : 'Reserva') + '</span><b>' + esc_(r.idReserva) + ' · ' + esc_(r.codigoReserva) + '</b></div>' +
     '<div class="adm-kv"><span>Reservó</span><b>' + esc_(r.nombreSolicitante || '—') + (r.telefonoSolicitante ? ' · ' + esc_(r.telefonoSolicitante) : '') + '</b></div>' +
     '<div class="adm-kv"><span>Pagado</span><b>' + formatearMonto_(r.montoPagado) + ' de ' + formatearMonto_(r.valorTotal) + '</b></div>' +
     (r.notas ? '<div class="adm-kv"><span>Notas</span><b>' + esc_(r.notas) + '</b></div>' : '') +
@@ -434,10 +449,13 @@ document.addEventListener('click', function (e) {
   if ((t = e.target.closest('[data-adm-rsv-accion]'))) {
     var accion = t.getAttribute('data-adm-rsv-accion'), id = t.getAttribute('data-id');
     var r = admBuscarReservaEnLista_(id) || { idReserva: id };
+    var yaPaso = r.estadoReserva === 'FINALIZADO';
     var textos = {
       aprobar: null,
       rechazar: ['Se rechaza la solicitud y el horario y el cruce quedan libres de nuevo. Acordate de avisarle por WhatsApp.', 'Rechazar'],
-      cancelar: ['Se cancela la reserva y el horario queda libre. La seña no se devuelve automáticamente.', 'Cancelar reserva'],
+      cancelar: yaPaso
+        ? ['Se cancela la reserva' + (r.idPartido ? ' y el partido ' + (r.parejaA ? r.parejaA + ' vs ' + r.parejaB + ' ' : '') + 'vuelve a quedar disponible para que lo reserven otro día' : '') + '. La plata que pagaron no se mueve sola: si la pasan a la nueva reserva, cargala ahí con "Editar".', 'Cancelar reserva']
+        : ['Se cancela la reserva y el horario queda libre. La seña no se devuelve automáticamente.', 'Cancelar reserva'],
       reactivar: ['La reserva vuelve a quedar activa (aprobada), si la cancha sigue libre.', 'Reactivar'],
     }[accion];
     var paso = textos ? admConfirmar_(textos[0], { ok: textos[1], peligro: accion !== 'reactivar', titulo: 'Reserva ' + id }) : Promise.resolve(true);

@@ -147,3 +147,7 @@
   .adm-kpis{grid-template-columns:repeat(4,1fr)}
   .adm-list.cols{display:grid;grid-template-columns:1fr 1fr;align-items:start}
 }
+
+/* Reservas: categoría y fecha del fixture bien visibles */
+.adm-rsv-cat{font-size:.74rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--gold-light);margin-bottom:6px}
+.adm-rsv-aviso{font-size:.8rem;line-height:1.35;color:#ffcf8a;background:rgba(255,182,72,.1);border:1px solid rgba(255,182,72,.3);border-radius:10px;padding:8px 10px;margin-bottom:8px}
