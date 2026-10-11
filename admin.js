@@ -383,7 +383,11 @@ function admCatFecha_(r) {
 // Ya pasó el día, era un partido de la liga y nunca se cargó resultado
 // (por ejemplo, se suspendió por lluvia).
 function admSinResultado_(r) {
-  return r.estadoReserva === 'FINALIZADO' && !!r.idPartido && !r.partidoJugado;
+  return r.estadoReserva === 'FINALIZADO' && !!r.idPartido && !r.partidoJugado && r.partidoExiste !== false;
+}
+// La reserva apunta a un partido que ya no está en el fixture (se rearmó).
+function admPartidoBorrado_(r) {
+  return !!r.idPartido && r.partidoExiste === false && (r.estadoReserva === 'FINALIZADO' || r.estadoReserva === 'RESERVADO' || r.estadoReserva === 'PENDIENTE_APROBACION');
 }
 function admCardReserva_(r) {
   var id = esc_(r.idReserva);
@@ -407,6 +411,7 @@ function admCardReserva_(r) {
 
   return '<div class="adm-card' + (pend || sinRes ? ' warn' : '') + (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO' ? ' off' : '') + '" data-adm-card="' + id + '">' +
     '<div class="adm-rsv-cat">' + esc_(admCatFecha_(r)) + '</div>' +
+    (admPartidoBorrado_(r) ? '<div class="adm-rsv-aviso gris">El partido ' + esc_(r.idPartido) + ' de esta reserva ya no está en el fixture (el fixture se rearmó). La reserva queda como registro; si querés, cancelala.</div>' : '') +
     (sinRes ? '<div class="adm-rsv-aviso">Ya pasó y no tiene resultado cargado. Si no se jugó (lluvia, etc.), cancelala y el partido vuelve a quedar disponible para reservar.</div>' : '') +
     '<div class="adm-row wrap"><div class="adm-row-l"><b>' + esc_(admFecha_(r.fecha, r.diaSemana)) + ' · ' + esc_(r.horarioInicio) + '-' + esc_(r.horarioFin) + '</b>' +
       '<span class="adm-muted">Cancha ' + esc_(r.cancha || '?') + '</span></div>' +
@@ -454,7 +459,7 @@ document.addEventListener('click', function (e) {
       aprobar: null,
       rechazar: ['Se rechaza la solicitud y el horario y el cruce quedan libres de nuevo. Acordate de avisarle por WhatsApp.', 'Rechazar'],
       cancelar: yaPaso
-        ? ['Se cancela la reserva' + (r.idPartido ? ' y el partido ' + (r.parejaA ? r.parejaA + ' vs ' + r.parejaB + ' ' : '') + 'vuelve a quedar disponible para que lo reserven otro día' : '') + '. La plata que pagaron no se mueve sola: si la pasan a la nueva reserva, cargala ahí con "Editar".', 'Cancelar reserva']
+        ? ['Se cancela la reserva' + (r.idPartido && r.partidoExiste !== false ? ' y el partido ' + (r.parejaA ? r.parejaA + ' vs ' + r.parejaB + ' ' : '') + 'vuelve a quedar disponible para que lo reserven otro día' : '') + '. La plata que pagaron no se mueve sola: si la pasan a la nueva reserva, cargala ahí con "Editar".', 'Cancelar reserva']
         : ['Se cancela la reserva y el horario queda libre. La seña no se devuelve automáticamente.', 'Cancelar reserva'],
       reactivar: ['La reserva vuelve a quedar activa (aprobada), si la cancha sigue libre.', 'Reactivar'],
     }[accion];
@@ -463,7 +468,9 @@ document.addEventListener('click', function (e) {
       if (!si) return;
       admConBoton_(t, '…', admRpc_('admin_reserva_estado', { p_id: id, p_accion: accion })).then(function (nueva) {
         var tx = { aprobar: 'Reserva aprobada', rechazar: 'Reserva rechazada', cancelar: 'Reserva cancelada', reactivar: 'Reserva reactivada' }[accion];
-        admToast_(tx + (nueva.telefonoSolicitante && (accion === 'aprobar' || accion === 'rechazar') ? ' · avisale por WhatsApp' : ''), 'ok');
+        var extra = (nueva.telefonoSolicitante && (accion === 'aprobar' || accion === 'rechazar')) ? ' · avisale por WhatsApp'
+          : (accion === 'cancelar' && nueva.idPartido && nueva.partidoExiste !== false) ? ' · el partido ya se puede volver a reservar' : '';
+        admToast_(tx + extra, 'ok');
         admReemplazarCard_(nueva);
       }).catch(admErr_);
     });

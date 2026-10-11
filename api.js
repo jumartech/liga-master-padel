@@ -73,7 +73,7 @@ function apiFetch(accion, params) {
     case 'categorias': return rpc('api_bootstrap');
     case 'fixture': return rpc('api_fixture', { p_categoria: params.categoria });
     case 'resultados': return rpc('api_resultados', { p_categoria: params.categoria });
-    case 'posiciones': return rpc('api_posiciones_datos', { p_categoria: params.categoria }).then(calcularPosiciones_);
+    case 'posiciones': return rpc('api_posiciones_datos', { p_categoria: params.categoria }); // crudo: la web calcula la tabla (por fecha)
     case 'mas': return rpc('api_mas');
     case 'galeria': return rpc('api_galeria');
     case 'sponsors': return rpc('api_sponsors');

@@ -282,20 +282,44 @@ function pintarChipsCategoria_(contId) {
     return '<button class="chip' + (cat === categoriaActual ? ' active' : '') + '" data-cat="' + esc_(cat) + '">' + esc_(cat) + '</button>';
   }).join('');
 }
-// Botones de categoría arriba de Posiciones / Fixture / Resultados.
+// Arriba de Posiciones / Fixture / Resultados se muestra la categoría
+// elegida en Inicio, con un botón para cambiarla (se cambia en Inicio).
 function pintarBarrasCategoria_() {
-  var html = CATEGORIAS.map(function (cat) {
-    return '<button class="chip' + (cat === categoriaActual ? ' active' : '') + '" data-cat="' + esc_(cat) + '">' + esc_(cat) + '</button>';
-  }).join('');
-  document.querySelectorAll('[data-cat-bar]').forEach(function (el) { el.innerHTML = html; });
+  var html = categoriaActual
+    ? '<span class="cat-actual-l">Categoría</span><b>' + esc_(categoriaActual) + '</b><button type="button" class="cat-actual-btn" data-go="inicio">Cambiar</button>'
+    : '';
+  document.querySelectorAll('[data-cat-actual]').forEach(function (el) { el.innerHTML = html; el.hidden = !categoriaActual; });
 }
 function mostrarCartelElegirCategoria_(pantalla) {
-  var cartel = '<div class="elegir-cat-card"><b>Elegí tu categoría</b><span>Tocá una de las categorías de arriba para ver ' +
-    ({ posiciones: 'la tabla de posiciones', fixture: 'el fixture', resultados: 'los resultados' }[pantalla] || 'esta sección') + '.</span></div>';
+  var cartel = '<div class="elegir-cat-card"><b>Seleccioná tu categoría</b><span>Para ver ' +
+    ({ posiciones: 'la tabla de posiciones', fixture: 'el fixture', resultados: 'los resultados' }[pantalla] || 'esta sección') +
+    ' primero elegí tu categoría en Inicio.</span><button type="button" class="btn-elegir-cat" data-go="inicio">Elegir categoría</button></div>';
+  ['posFechas', 'fixFechas', 'resFechas'].forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
+  var alc = document.getElementById('posAlcance'); if (alc) alc.hidden = true;
+  var head = document.getElementById('posHead'); if (head) head.hidden = true;
+  var hint = document.querySelector('#screen-posiciones .hint-line'); if (hint) hint.hidden = true;
   if (pantalla === 'posiciones') document.getElementById('posRows').innerHTML = cartel;
-  if (pantalla === 'fixture') { document.getElementById('fixFechas').innerHTML = ''; document.getElementById('fixMatches').innerHTML = cartel; }
+  if (pantalla === 'fixture') document.getElementById('fixMatches').innerHTML = cartel;
   if (pantalla === 'resultados') document.getElementById('resMatches').innerHTML = cartel;
 }
+// Chips de fecha. opcionTodas: texto del chip "todas" (valor 0), o null.
+function pintarChipsFecha_(contId, numeros, sel, opcionTodas, atributo) {
+  var html = '';
+  if (opcionTodas) html += '<button class="chip' + (!sel ? ' active' : '') + '" ' + atributo + '="0">' + esc_(opcionTodas) + '</button>';
+  html += numeros.map(function (n) {
+    return '<button class="chip' + (n === sel ? ' active' : '') + '" ' + atributo + '="' + n + '">Fecha ' + n + '</button>';
+  }).join('');
+  var cont = document.getElementById(contId);
+  cont.innerHTML = html;
+  var activo = cont.querySelector('.chip.active');
+  if (activo && cont.scrollWidth > cont.clientWidth) cont.scrollLeft = Math.max(0, activo.offsetLeft - cont.clientWidth / 2 + activo.offsetWidth / 2);
+}
+function fechasUnicas_(lista) {
+  var vistos = {}, out = [];
+  lista.forEach(function (n) { n = Number(n); if (n && !vistos[n]) { vistos[n] = 1; out.push(n); } });
+  return out.sort(function (a, b) { return a - b; });
+}
+var fechaPosPorCategoria = {}, fechaResPorCategoria = {};
 function elegirCategoria_(cat) {
   if (!cat) return;
   var cambioReal = (categoriaActual !== cat);
@@ -528,15 +552,30 @@ function cargarPosiciones_() {
   var clave = 'pos|' + cat;
   if (cacheFresco_(clave)) { renderPosiciones_(cache_[clave]); return; }
   document.getElementById('posRows').innerHTML = '<div class="state-loading">Cargando…</div>';
-  pedirConCache_(clave, function () { return apiFetch('posiciones', { categoria: cat }); }).then(function (filas) {
-    if (categoriaActual === cat) renderPosiciones_(filas);
+  pedirConCache_(clave, function () { return apiFetch('posiciones', { categoria: cat }); }).then(function (datos) {
+    if (categoriaActual === cat) renderPosiciones_(datos);
   }).catch(function () {
     if (categoriaActual === cat) document.getElementById('posRows').innerHTML =
       '<p class="state-empty">No se pudo cargar la tabla. Probá de nuevo en un momento.</p>';
   });
 }
-function renderPosiciones_(filas) {
+function renderPosiciones_(datos) {
+  datos = datos || {};
   var cont = document.getElementById('posRows');
+  document.getElementById('posHead').hidden = false;
+  var hint = document.querySelector('#screen-posiciones .hint-line'); if (hint) hint.hidden = false;
+  var partidos = datos.partidos || [];
+  var fechas = fechasUnicas_(partidos.map(function (p) { return p.f; }));
+  var sel = fechaPosPorCategoria[categoriaActual] || 0;
+  if (sel && fechas.indexOf(sel) < 0) sel = fechaPosPorCategoria[categoriaActual] = 0;
+  pintarChipsFecha_('posFechas', fechas, sel, 'General', 'data-pos-fecha');
+  var alc = document.getElementById('posAlcance');
+  alc.hidden = !sel;
+  alc.textContent = sel ? 'Tabla con los partidos jugados hasta la Fecha ' + sel + ' inclusive.' : '';
+  var filas = calcularPosiciones_({
+    parejas: datos.parejas || [],
+    partidos: sel ? partidos.filter(function (p) { return Number(p.f) <= sel; }) : partidos,
+  });
   if (!filas.length) { cont.innerHTML = '<p class="state-empty">Todavía no hay parejas activas en esta categoría.</p>'; return; }
   cont.innerHTML = filas.map(function (f, i) {
     var rankClass = i === 0 ? ' g1' : i === 1 ? ' g2' : i === 2 ? ' g3' : '';
@@ -555,6 +594,19 @@ function renderPosiciones_(filas) {
     '</div>';
   }).join('');
 }
+document.addEventListener('click', function (e) {
+  var el = e.target.closest('[data-pos-fecha]');
+  if (el) {
+    fechaPosPorCategoria[categoriaActual] = Number(el.getAttribute('data-pos-fecha'));
+    var d = cache_['pos|' + categoriaActual]; if (d) renderPosiciones_(d);
+    return;
+  }
+  el = e.target.closest('[data-res-fecha]');
+  if (el) {
+    fechaResPorCategoria[categoriaActual] = Number(el.getAttribute('data-res-fecha'));
+    var r = cache_['res|' + categoriaActual]; if (r) renderResultados_(r);
+  }
+});
 document.addEventListener('click', function (e) {
   var btn = e.target.closest('[data-toggle-row]');
   if (btn) btn.closest('.standing-row').classList.toggle('open');
@@ -607,9 +659,7 @@ function renderFixture_(datos) {
     fechaPorCategoria[categoriaActual] = datos.fechas[datos.fechas.length - 1].numero;
   }
   var sel = fechaPorCategoria[categoriaActual];
-  contFechas.innerHTML = datos.fechas.map(function (f) {
-    return '<button class="chip' + (f.numero === sel ? ' active' : '') + '" data-fecha="' + f.numero + '">Fecha ' + f.numero + '</button>';
-  }).join('');
+  pintarChipsFecha_('fixFechas', datos.fechas.map(function (f) { return f.numero; }), sel, null, 'data-fecha');
   var fecha = datos.fechas.filter(function (f) { return f.numero === sel; })[0] || datos.fechas[0];
   // Nota: acá NO se muestran horario ni cancha porque PARTIDOS no trae
   // esos datos hoy. Apenas existan en la planilla, se agregan sin tocar
@@ -652,9 +702,16 @@ function cargarResultados_() {
 }
 function renderResultados_(lista) {
   var cont = document.getElementById('resMatches');
-  if (!lista.length) { cont.innerHTML = '<p class="state-empty">Todavía no hay resultados cargados en esta categoría.</p>'; return; }
+  if (!lista.length) {
+    document.getElementById('resFechas').innerHTML = '';
+    cont.innerHTML = '<p class="state-empty">Todavía no hay resultados cargados en esta categoría.</p>'; return;
+  }
+  var sel = fechaResPorCategoria[categoriaActual] || 0;
+  var fechas = fechasUnicas_(lista.map(function (r) { return r.fecha; }));
+  if (sel && fechas.indexOf(sel) < 0) sel = fechaResPorCategoria[categoriaActual] = 0;
+  pintarChipsFecha_('resFechas', fechas, sel, 'Todas', 'data-res-fecha');
   var porFecha = {}, orden = [];
-  lista.forEach(function (r) {
+  lista.filter(function (r) { return !sel || Number(r.fecha) === sel; }).forEach(function (r) {
     if (!porFecha[r.fecha]) { porFecha[r.fecha] = []; orden.push(r.fecha); }
     porFecha[r.fecha].push(r);
   });
