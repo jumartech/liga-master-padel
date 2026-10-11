@@ -17,8 +17,8 @@
 <meta http-equiv="Expires" content="0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=20261008b">
-<link rel="stylesheet" href="admin.css?v=20261008b">
+<link rel="stylesheet" href="styles.css?v=20261011">
+<link rel="stylesheet" href="admin.css?v=20261011">
 </head>
 <body>
 
@@ -166,6 +166,7 @@
         <h1>Posiciones</h1>
         <p>Tabla en vivo — fase de grupos</p>
       </div>
+      <div class="cat-chips screen-cats" data-cat-bar></div>
       <div class="standings-head">
         <span class="sh-rank">Pos</span><span class="sh-pareja">Pareja</span>
         <span class="sh-num">PJ</span><span class="sh-num">PG</span><span class="sh-num">PP</span>
@@ -185,6 +186,7 @@
         <h1>Fixture</h1>
         <p>Todos contra todos</p>
       </div>
+      <div class="cat-chips screen-cats" data-cat-bar></div>
       <div class="fecha-chips" id="fixFechas"></div>
       <div id="fixMatches"><div class="state-loading">Cargando…</div></div>
     </section>
@@ -199,6 +201,7 @@
         <h1>Resultados</h1>
         <p>Partidos ya jugados</p>
       </div>
+      <div class="cat-chips screen-cats" data-cat-bar></div>
       <div id="resMatches"><div class="state-loading">Cargando…</div></div>
     </section>
 
@@ -271,6 +274,7 @@
         <p>Galería de la liga</p>
       </div>
       <div class="filter-chips" id="fotosFiltros"></div>
+      <div class="photo-slider" id="fotosSlider" hidden></div>
       <div class="photo-grid" id="fotosGrid"><div class="state-loading">Cargando…</div></div>
     </section>
 
@@ -383,7 +387,7 @@
       <!-- PASO 1: categoría -->
       <div class="rsv-panel" id="rsv-panel-categoria">
         <h2 class="rsv-panel-title">Elegí tu categoría</h2>
-        <div class="cat-chips" id="rsvCats"></div>
+        <div class="cat-chips wrap" id="rsvCats"></div>
       </div>
 
       <!-- PASO 2: cruce -->
@@ -484,19 +488,16 @@
       <button class="back-row" data-go="mas"><svg class="ic ic-sm"><use href="#icon-chevron"/></svg> Más</button>
       <div class="screen-head">
         <h1>Buscar mi reserva</h1>
-        <p>Sin el link, con teléfono y código</p>
+        <p>Con tu teléfono o con el código de la reserva</p>
       </div>
       <div class="rsv-field">
-        <label for="buscarTelefono">Teléfono usado en la reserva</label>
-        <input type="tel" id="buscarTelefono" maxlength="40" placeholder="Ej: 3511234567" autocomplete="tel">
-      </div>
-      <div class="rsv-field">
-        <label for="buscarCodigo">Código de la reserva</label>
-        <input type="text" id="buscarCodigo" maxlength="12" placeholder="Ej: A3B7K9QZ" autocapitalize="characters" autocomplete="off">
+        <label for="buscarTexto">Teléfono o código</label>
+        <input type="text" id="buscarTexto" maxlength="40" placeholder="Ej: 3511234567 o A3B7K9QZ" autocomplete="off" autocapitalize="characters">
       </div>
       <p class="rsv-error" id="buscar-reserva-error" hidden></p>
       <button class="doc-card-btn" id="buscarReservaBtn" type="button">Buscar mi reserva</button>
-      <p class="hint-line">Los dos datos tienen que ser de la misma reserva.</p>
+      <p class="hint-line">Con el código podés ver y cancelar tu reserva. Con el teléfono ves tus reservas.</p>
+      <div id="buscarResultados" class="buscar-resultados"></div>
     </section>
 
     <!-- ============ GESTIÓN DE RESERVA (vía ?token=...) ============ -->
@@ -523,6 +524,21 @@
   </nav>
 
 </div>
+
+<!-- Visor de fotos a pantalla completa (galería) -->
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lb-close" data-lb-cerrar aria-label="Cerrar">×</button>
+  <button class="lb-nav lb-prev" data-lb-prev aria-label="Anterior">‹</button>
+  <img class="lb-img" id="lbImg" alt="">
+  <button class="lb-nav lb-next" data-lb-next aria-label="Siguiente">›</button>
+  <div class="lb-bar">
+    <span class="lb-caption" id="lbCaption"></span>
+    <a class="lb-download" id="lbDownload" href="#" target="_blank" rel="noopener">Descargar</a>
+  </div>
+</div>
+
+<!-- Solo se ve si este dispositivo tiene la sesión de admin abierta -->
+<button class="volver-admin" id="volverAdmin" type="button" hidden>‹ Volver al panel</button>
 
 <!-- ============================================================
      PANEL DE ADMINISTRACIÓN — se abre entrando con la contraseña de
@@ -552,9 +568,9 @@
   });
 })();
 </script>
-<script src="config.js?v=20261008b"></script>
-<script src="api.js?v=20261008b"></script>
-<script src="app.js?v=20261008b"></script>
-<script src="admin.js?v=20261008b"></script>
+<script src="config.js?v=20261011"></script>
+<script src="api.js?v=20261011"></script>
+<script src="app.js?v=20261011"></script>
+<script src="admin.js?v=20261011"></script>
 </body>
 </html>

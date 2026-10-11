@@ -102,7 +102,7 @@ function reservasApiPost_(accion, d) {
         p_id_retencion: d.idRetencion, p_nombre: d.nombre, p_telefono: d.telefono,
         p_comprobante: d.comprobanteBase64, p_mime: d.comprobanteTipoMime,
       }, API_TIMEOUT_SUBIDA_MS_);
-    case 'buscarReserva': return rpc('api_buscar_reserva', { p_telefono: d.telefono, p_codigo: d.codigo });
+    case 'buscarReserva': return rpc('api_buscar_reserva_simple', { p_texto: d.texto });
     case 'cancelarReserva': return rpc('api_cancelar_reserva', { p_token: d.token });
     case 'verificarAcceso': return rpc('api_login', { p_clave: d.clave });
     case 'validarTokenAcceso': return rpc('api_validar_acceso', { p_token: d.token, p_version: d.version });

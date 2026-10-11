@@ -245,10 +245,11 @@ document.addEventListener('click', function (e) {
 });
 
 function cargarPantalla_(pantalla) {
-  // Sin categoría elegida todavía no hay nada que filtrar en estas tres
-  // pantallas: mandamos al jugador de vuelta a Inicio a elegirla.
+  // Sin categoría elegida: la pantalla se abre igual y muestra un cartel
+  // para elegirla ahí mismo (los botones de categoría están arriba).
+  pintarBarrasCategoria_();
   if (!categoriaActual && (pantalla === 'posiciones' || pantalla === 'fixture' || pantalla === 'resultados')) {
-    irA('inicio');
+    mostrarCartelElegirCategoria_(pantalla);
     return;
   }
   if (pantalla === 'posiciones') cargarPosiciones_();
@@ -264,6 +265,15 @@ function cargarPantalla_(pantalla) {
   // más abajo), porque depende del token de la URL, no de la navegación.
 }
 
+// En la compu, la rueda del mouse mueve hacia los costados las filas de
+// botones que se desplazan horizontalmente (en el celular ya se deslizan).
+document.addEventListener('wheel', function (e) {
+  var fila = e.target.closest && e.target.closest('.cat-chips, .fecha-chips, .filter-chips');
+  if (!fila || fila.scrollWidth <= fila.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+  fila.scrollLeft += e.deltaY;
+  e.preventDefault();
+}, { passive: false });
+
 // ============================================================
 // Selector de categoría (chips, compartido entre 3 pantallas)
 // ============================================================
@@ -271,6 +281,20 @@ function pintarChipsCategoria_(contId) {
   document.getElementById(contId).innerHTML = CATEGORIAS.map(function (cat) {
     return '<button class="chip' + (cat === categoriaActual ? ' active' : '') + '" data-cat="' + esc_(cat) + '">' + esc_(cat) + '</button>';
   }).join('');
+}
+// Botones de categoría arriba de Posiciones / Fixture / Resultados.
+function pintarBarrasCategoria_() {
+  var html = CATEGORIAS.map(function (cat) {
+    return '<button class="chip' + (cat === categoriaActual ? ' active' : '') + '" data-cat="' + esc_(cat) + '">' + esc_(cat) + '</button>';
+  }).join('');
+  document.querySelectorAll('[data-cat-bar]').forEach(function (el) { el.innerHTML = html; });
+}
+function mostrarCartelElegirCategoria_(pantalla) {
+  var cartel = '<div class="elegir-cat-card"><b>Elegí tu categoría</b><span>Tocá una de las categorías de arriba para ver ' +
+    ({ posiciones: 'la tabla de posiciones', fixture: 'el fixture', resultados: 'los resultados' }[pantalla] || 'esta sección') + '.</span></div>';
+  if (pantalla === 'posiciones') document.getElementById('posRows').innerHTML = cartel;
+  if (pantalla === 'fixture') { document.getElementById('fixFechas').innerHTML = ''; document.getElementById('fixMatches').innerHTML = cartel; }
+  if (pantalla === 'resultados') document.getElementById('resMatches').innerHTML = cartel;
 }
 function elegirCategoria_(cat) {
   if (!cat) return;
@@ -361,6 +385,7 @@ function actualizarSelectorInicio_(abrir) {
   if (typeof abrir === 'boolean') selectorInicioAbierto_ = abrir;
 
   pintarChipsCategoria_('inicioCats');
+  pintarBarrasCategoria_();
 
   var hayCategoria = !!categoriaActual;
   var mostrarChips = selectorInicioAbierto_;
@@ -434,16 +459,28 @@ function cargarFotosInicio_() {
   // Inicio y después a Fotos pedía "galeria" dos veces por separado.
   pedirConCache_('fotos', function () { return apiFetch('galeria'); }).then(function (fotos) {
     if (!Array.isArray(fotos) || !fotos.length) return;
-    var foto = fotos[0] || {};
     var banner = document.getElementById('community-banner');
     var bg = document.getElementById('community-bg');
-    var img = new Image();
-    img.onload = function () {
-      bg.style.backgroundImage = "url('" + foto.url + "')";
-      banner.hidden = false;
-    };
-    img.onerror = function () { /* la foto no cargó: el banner sigue oculto */ };
-    img.src = foto.url;
+    var i = 0;
+    // Las fotos van pasando solas en el banner del inicio.
+    function mostrar(idx) {
+      var foto = fotos[idx] || {};
+      var img = new Image();
+      img.onload = function () {
+        bg.style.backgroundImage = "url('" + foto.url + "')";
+        banner.hidden = false;
+      };
+      img.src = foto.url;
+    }
+    mostrar(0);
+    clearInterval(cargarFotosInicio_.timer);
+    if (fotos.length > 1) {
+      cargarFotosInicio_.timer = setInterval(function () {
+        if (document.visibilityState !== 'visible' || pantallaActual !== 'inicio') return;
+        i = (i + 1) % fotos.length;
+        mostrar(i);
+      }, 5000);
+    }
   }).catch(function () { /* sin fotos no rompe Inicio */ });
 }
 
@@ -674,14 +711,120 @@ function renderFotos_(fotos) {
   }).join('');
   pintarGrillaFotos_();
 }
+function fotosFiltradas_() {
+  return filtroFotoActual === 'Todas' ? fotosCache_ : fotosCache_.filter(function (f) { return f.categoria === filtroFotoActual; });
+}
 function pintarGrillaFotos_() {
-  var lista = filtroFotoActual === 'Todas' ? fotosCache_ : fotosCache_.filter(function (f) { return f.categoria === filtroFotoActual; });
+  var lista = fotosFiltradas_();
   var cont = document.getElementById('fotosGrid');
+  pintarSliderFotos_(lista);
   if (!lista.length) { cont.innerHTML = '<p class="state-empty">Todavía no hay fotos cargadas.</p>'; return; }
-  cont.innerHTML = lista.map(function (f) {
-    return '<div class="photo-swatch"><img loading="lazy" src="' + esc_(f.url) + '" alt="' + esc_(f.titulo) + '" onerror="this.parentElement.remove()"><span>' + esc_(f.titulo || f.categoria) + '</span></div>';
+  cont.innerHTML = lista.map(function (f, i) {
+    return '<button class="photo-swatch" data-foto-idx="' + i + '"><img loading="lazy" src="' + esc_(f.url) + '" alt="' + esc_(f.titulo) + '" onerror="this.parentElement.remove()"><span>' + esc_(f.titulo || f.categoria) + '</span></button>';
   }).join('');
 }
+
+// ---------- Slider: las fotos van pasando solas ----------
+var sliderTimer_ = null, sliderIdx_ = 0;
+function pintarSliderFotos_(lista) {
+  var cont = document.getElementById('fotosSlider');
+  clearInterval(sliderTimer_);
+  if (!lista.length) { cont.hidden = true; cont.innerHTML = ''; return; }
+  sliderIdx_ = 0;
+  cont.hidden = false;
+  cont.innerHTML = '<div class="ps-track">' + lista.map(function (f, i) {
+    return '<button class="ps-slide" data-foto-idx="' + i + '"><img src="' + esc_(f.url) + '" alt="' + esc_(f.titulo) + '" ' + (i > 1 ? 'loading="lazy"' : '') + '>' +
+      (f.titulo ? '<span>' + esc_(f.titulo) + '</span>' : '') + '</button>';
+  }).join('') + '</div>' +
+  (lista.length > 1 ? '<div class="ps-dots">' + lista.map(function (f, i) {
+    return '<button class="ps-dot' + (i === 0 ? ' active' : '') + '" data-ps-dot="' + i + '" aria-label="Foto ' + (i + 1) + '"></button>';
+  }).join('') + '</div>' : '');
+  var track = cont.querySelector('.ps-track');
+  track.addEventListener('scroll', function () {
+    var i = Math.round(track.scrollLeft / track.clientWidth);
+    if (i !== sliderIdx_) { sliderIdx_ = i; marcarDotSlider_(); }
+  }, { passive: true });
+  if (lista.length > 1) {
+    sliderTimer_ = setInterval(function () {
+      if (document.visibilityState !== 'visible' || pantallaActual !== 'fotos' || !document.getElementById('lightbox').hidden) return;
+      irASlide_((sliderIdx_ + 1) % lista.length);
+    }, 4000);
+  }
+}
+function irASlide_(i) {
+  var track = document.querySelector('#fotosSlider .ps-track');
+  if (!track) return;
+  sliderIdx_ = i;
+  track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+  marcarDotSlider_();
+}
+function marcarDotSlider_() {
+  document.querySelectorAll('#fotosSlider .ps-dot').forEach(function (d, i) { d.classList.toggle('active', i === sliderIdx_); });
+}
+document.addEventListener('click', function (e) {
+  var d = e.target.closest('[data-ps-dot]');
+  if (d) irASlide_(Number(d.getAttribute('data-ps-dot')));
+});
+
+// ---------- Visor a pantalla completa + descarga ----------
+var lbIdx_ = 0;
+function linkDescargaFoto_(url) {
+  // Fotos de Google Drive: link de descarga directa del archivo original.
+  var m = /drive\.google\.com\/thumbnail\?id=([A-Za-z0-9_-]+)/.exec(url || '');
+  return m ? 'https://drive.google.com/uc?export=download&id=' + m[1] : url;
+}
+function abrirVisorFoto_(i) {
+  var lista = fotosFiltradas_();
+  if (!lista.length) return;
+  lbIdx_ = (i + lista.length) % lista.length;
+  var f = lista[lbIdx_];
+  document.getElementById('lbImg').src = f.url;
+  document.getElementById('lbImg').alt = f.titulo || '';
+  document.getElementById('lbCaption').textContent = f.titulo || f.categoria || '';
+  document.getElementById('lbDownload').href = linkDescargaFoto_(f.url);
+  document.querySelectorAll('#lightbox .lb-nav').forEach(function (b) { b.hidden = lista.length < 2; });
+  document.getElementById('lightbox').hidden = false;
+}
+function cerrarVisorFoto_() { document.getElementById('lightbox').hidden = true; }
+document.addEventListener('click', function (e) {
+  var el = e.target.closest('[data-foto-idx]');
+  if (el) { abrirVisorFoto_(Number(el.getAttribute('data-foto-idx'))); return; }
+  if (e.target.closest('[data-lb-cerrar]') || e.target.id === 'lightbox') { cerrarVisorFoto_(); return; }
+  if (e.target.closest('[data-lb-prev]')) { abrirVisorFoto_(lbIdx_ - 1); return; }
+  if (e.target.closest('[data-lb-next]')) { abrirVisorFoto_(lbIdx_ + 1); return; }
+  if (e.target.closest('#lbDownload')) {
+    // Si la foto no es de Drive, se intenta bajar el archivo directo; si
+    // el sitio no lo permite, se abre en otra pestaña para guardarla.
+    var url = document.getElementById('lbDownload').href;
+    if (/drive\.google\.com/.test(url)) return;
+    e.preventDefault();
+    fetch(url).then(function (r) { if (!r.ok) throw new Error(); return r.blob(); }).then(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (document.getElementById('lbCaption').textContent || 'foto-liga') + '.jpg';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    }).catch(function () { window.open(url, '_blank', 'noopener'); });
+  }
+});
+document.addEventListener('keydown', function (e) {
+  if (document.getElementById('lightbox').hidden) return;
+  if (e.key === 'Escape') cerrarVisorFoto_();
+  if (e.key === 'ArrowLeft') abrirVisorFoto_(lbIdx_ - 1);
+  if (e.key === 'ArrowRight') abrirVisorFoto_(lbIdx_ + 1);
+});
+// Deslizar el dedo en el visor para pasar de foto.
+(function () {
+  var x0 = null;
+  var lb = document.getElementById('lightbox');
+  lb.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  lb.addEventListener('touchend', function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0;
+    x0 = null;
+    if (Math.abs(dx) > 50) abrirVisorFoto_(lbIdx_ + (dx < 0 ? 1 : -1));
+  });
+})();
 document.addEventListener('click', function (e) {
   var el = e.target.closest('[data-foto-cat]');
   if (!el) return;
@@ -1354,47 +1497,66 @@ function reservarPintarGestion_(r, token) {
 }
 
 // ============================================================
-// Buscar mi reserva (teléfono + código, sin el link privado)
+// Buscar mi reserva: un solo campo (teléfono o código)
 // ============================================================
-// V1: para cuando el jugador cerró la app y no guardó el link de
-// "Gestionar mi reserva". Requiere los DOS datos -- el backend
-// (mp360ReservasBuscarPorTelefono_) ya rechaza si falta cualquiera de
-// los dos o si no coinciden en la misma reserva.
+// Con el código se abre la reserva completa (y se puede cancelar). Con el
+// teléfono se listan las reservas de ese número solo para ver: para
+// cancelar hace falta el código, así nadie cancela una reserva ajena
+// sabiendo solo un teléfono.
 function buscarReservaResetForm_() {
-  document.getElementById('buscarTelefono').value = '';
-  document.getElementById('buscarCodigo').value = '';
+  document.getElementById('buscarTexto').value = '';
   document.getElementById('buscar-reserva-error').hidden = true;
+  document.getElementById('buscarResultados').innerHTML = '';
   var btn = document.getElementById('buscarReservaBtn');
   btn.disabled = false;
   btn.textContent = 'Buscar mi reserva';
 }
+function pintarReservasPorTelefono_(lista) {
+  var cont = document.getElementById('buscarResultados');
+  cont.innerHTML = '<p class="hint-line">' + lista.length + (lista.length === 1 ? ' reserva encontrada.' : ' reservas encontradas.') +
+    ' Para cancelar, buscá con el código de esa reserva.</p>' +
+    lista.map(function (r) {
+      return '<div class="rsv-summary">' +
+        '<div class="rsv-summary-row"><span>Fecha</span><b>' + esc_((r.diaSemana ? r.diaSemana + ' ' : '') + formatearFechaLarga_(r.fecha)) + ' · ' +
+          esc_(formatearHorarioSeguro_(r.horarioInicio)) + ' - ' + esc_(formatearHorarioSeguro_(r.horarioFin)) + '</b></div>' +
+        (r.parejaA ? '<div class="rsv-summary-row"><span>Cruce</span><b>' + esc_(r.parejaA) + ' vs ' + esc_(r.parejaB) + '</b></div>' : '') +
+        (r.categoria ? '<div class="rsv-summary-row"><span>Categoría</span><b>' + esc_(r.categoria) + '</b></div>' : '') +
+        (r.cancha ? '<div class="rsv-summary-row"><span>Cancha</span><b>Cancha ' + esc_(r.cancha) + '</b></div>' : '') +
+        '<div class="rsv-summary-row"><span>Estado</span><b>' + esc_(RSV_ESTADO_RESERVA_TX_[r.estadoReserva] || r.estadoReserva) + '</b></div>' +
+        '<div class="rsv-summary-row"><span>Pagado</span><b>' + formatearMonto_(r.montoPagado) + ' de ' + formatearMonto_(r.valorTotal) + '</b></div>' +
+      '</div>';
+    }).join('');
+}
+document.getElementById('buscarTexto').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('buscarReservaBtn').click();
+});
 document.getElementById('buscarReservaBtn').addEventListener('click', function () {
   if (reservaEnvioEnCurso_) return; // evita doble click
   var err = document.getElementById('buscar-reserva-error');
   err.hidden = true;
-
-  var telefono = document.getElementById('buscarTelefono').value.trim();
-  var codigo = document.getElementById('buscarCodigo').value.trim();
-  if (!telefono || !codigo) {
+  document.getElementById('buscarResultados').innerHTML = '';
+  var texto = document.getElementById('buscarTexto').value.trim();
+  if (!texto) {
     err.hidden = false;
-    err.textContent = 'Ingresá el teléfono y el código de tu reserva.';
+    err.textContent = 'Escribí tu teléfono o el código de tu reserva.';
     return;
   }
-
   reservaEnvioEnCurso_ = true;
   var btn = this;
   btn.disabled = true;
   btn.textContent = 'Buscando…';
-
-  reservasApiPost_('buscarReserva', { telefono: telefono, codigo: codigo }).then(function (datos) {
+  reservasApiPost_('buscarReserva', { texto: texto }).then(function (res) {
     reservaEnvioEnCurso_ = false;
-    buscarReservaResetForm_();
-    // La búsqueda abre la gestión solo dentro de esta sesión. No dejamos
-    // ?token= pegado en la barra: si el jugador actualiza la página debe
-    // volver siempre a Inicio, no reaparecer en "Gestionar mi reserva".
-    try { history.replaceState(null, '', location.pathname); } catch (e) { /* no crítico */ }
-    irA('reserva-gestion');
-    reservarPintarGestion_(datos, datos.tokenGestion);
+    btn.disabled = false;
+    btn.textContent = 'Buscar mi reserva';
+    if (res.modo === 'codigo') {
+      buscarReservaResetForm_();
+      try { history.replaceState(null, '', location.pathname); } catch (e) { /* no crítico */ }
+      irA('reserva-gestion');
+      reservarPintarGestion_(res.reserva, res.reserva.tokenGestion);
+    } else {
+      pintarReservasPorTelefono_(res.reservas || []);
+    }
   }).catch(function (e) {
     reservaEnvioEnCurso_ = false;
     btn.disabled = false;
@@ -1484,9 +1646,20 @@ function abrirWebJugador_() {
   document.getElementById('app').hidden = false;
   cache_ = {};
   cacheTs_ = {};
+  actualizarBotonVolverAdmin_();
   if (!appArrancada_) arrancarRuteoInicial_(true);
   else irA('inicio');
 }
+// "Volver al panel": solo aparece si este dispositivo tiene la sesión de
+// admin abierta. Vuelve al panel sin pedir la contraseña de nuevo.
+function actualizarBotonVolverAdmin_() {
+  var b = document.getElementById('volverAdmin');
+  if (b) b.hidden = !(typeof adminLeerSesion_ === 'function' && adminLeerSesion_());
+}
+document.getElementById('volverAdmin').addEventListener('click', function () {
+  this.hidden = true;
+  abrirPanelAdmin_();
+});
 
 // ============================================================
 // Arranque
