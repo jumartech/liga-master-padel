@@ -1286,6 +1286,7 @@ document.getElementById('rsvConfirmarBtn').addEventListener('click', function ()
   if (!reservaRetencion_) { reservarMostrarErrorCheckout_('Tu retención ya no está activa. Elegí el turno de nuevo.', true); return; }
 
   reservaEnvioEnCurso_ = true;
+  var ventanaTicket = abrirPestanaTicket_();
   var btn = this;
   btn.disabled = true;
   btn.textContent = 'Confirmando…';
@@ -1302,9 +1303,17 @@ document.getElementById('rsvConfirmarBtn').addEventListener('click', function ()
   confirmarReservaConReintento_(payloadConfirmar, btn).then(function (datos) {
     reservaEnvioEnCurso_ = false;
     if (reservaCountdownTimer_) { clearInterval(reservaCountdownTimer_); reservaCountdownTimer_ = null; }
+    datos = Object.assign({ nombre: nombre, telefono: telefono }, datos);
     reservarPintarExito_(datos);
     reservarIrAPaso_('exito');
+    var urlWa = urlTicketWhatsapp_(datos);
+    var abierta = false;
+    if (ventanaTicket && !ventanaTicket.closed) {
+      try { ventanaTicket.location.href = urlWa; abierta = true; } catch (e) { abierta = false; }
+    }
+    if (!abierta) mostrarAvisoTicket_(urlWa);
   }).catch(function (err) {
+    if (ventanaTicket && !ventanaTicket.closed) { try { ventanaTicket.close(); } catch (e) {} }
     reservaEnvioEnCurso_ = false;
     btn.disabled = false;
     btn.textContent = 'Confirmar reserva';
@@ -1351,16 +1360,68 @@ function confirmarReservaConReintento_(payload, btn) {
 // le sirve al jugador para tener el código guardado en su propio chat, y
 // al organizador le llega el aviso, pero SIEMPRE es el jugador quien
 // decide tocar "Enviar" del lado de WhatsApp).
+// Número al que se manda el ticket de cada reserva.
+var WHATSAPP_TICKET_ = '5493516234487';
 function construirMensajeWhatsapp_(datos) {
-  return '🎾 Reserva Liga Master Pádel 360\n\n' +
-    'Estado: Pendiente de aprobación\n' +
-    'Categoría: ' + datos.categoria + '\n' +
-    'Partido: ' + datos.parejaA + ' vs ' + datos.parejaB + '\n' +
-    'Fecha: ' + formatearFechaLarga_(datos.fecha) + '\n' +
-    'Horario: ' + formatearHorarioSeguro_(datos.horarioInicio) + ' - ' + formatearHorarioSeguro_(datos.horarioFin) + '\n' +
-    'Seña enviada: ' + formatearMonto_(datos.montoPagado) + '\n' +
-    'Código de reserva: ' + datos.codigoReserva + '\n\n' +
-    'Quedo a la espera de confirmación.';
+  var linea = '━━━━━━━━━━━━━━━━';
+  return '🎾 *TICKET DE RESERVA*\n*Liga Master Pádel 360*\n' + linea + '\n' +
+    '🔖 Código: *' + datos.codigoReserva + '*\n' +
+    '🏆 Categoría: ' + datos.categoria + '\n' +
+    '⚔️ Partido: ' + datos.parejaA + ' vs ' + datos.parejaB + '\n' +
+    '📅 Fecha: ' + diaSemanaTicket_(datos.fecha) + formatearFechaLarga_(datos.fecha) + '\n' +
+    '🕒 Horario: ' + formatearHorarioSeguro_(datos.horarioInicio) + ' - ' + formatearHorarioSeguro_(datos.horarioFin) + '\n' +
+    (datos.cancha ? '📍 Cancha: ' + datos.cancha + '\n' : '') +
+    linea + '\n' +
+    '👤 Reservó: ' + (datos.nombre || '') + '\n' +
+    '📱 Teléfono: ' + (datos.telefono || '') + '\n' +
+    linea + '\n' +
+    '💵 Seña enviada: ' + formatearMonto_(datos.montoPagado) + '\n' +
+    '💰 Saldo a pagar: ' + formatearMonto_(datos.saldoPendiente) + '\n' +
+    '⏳ Estado: Pendiente de aprobación\n' +
+    linea + '\n' +
+    'Quedo a la espera de la confirmación.';
+}
+function diaSemanaTicket_(fecha) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(fecha || ''));
+  if (!m) return '';
+  var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()] + ' ';
+}
+function urlTicketWhatsapp_(datos) {
+  return 'https://wa.me/' + WHATSAPP_TICKET_ + '?text=' + encodeURIComponent(construirMensajeWhatsapp_(datos));
+}
+// La pestaña de WhatsApp se abre en el mismo toque de "Confirmar" (si se
+// abriera después de esperar al servidor, el navegador la bloquearía como
+// ventana emergente). Mientras se confirma muestra "Confirmando…"; si la
+// reserva falla, se cierra sola.
+function abrirPestanaTicket_() {
+  var w = null;
+  try { w = window.open('', '_blank'); } catch (e) { w = null; }
+  if (!w) return null;
+  try {
+    w.document.write('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirmando reserva…</title>' +
+      '<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0c;color:#f7f6f3;font-family:system-ui,sans-serif;text-align:center;padding:24px">' +
+      '<div><div style="font-size:42px">🎾</div><p style="font-size:18px;font-weight:700;margin:12px 0 6px">Confirmando tu reserva…</p>' +
+      '<p style="color:#9a9a9e;margin:0">En un momento se abre WhatsApp con el ticket.</p></div></body>');
+    w.document.close();
+  } catch (e) {}
+  return w;
+}
+// Si el navegador no dejó abrir la pestaña, aparece un aviso que pide
+// tocar el botón para mandar el ticket (solo se cierra al tocarlo).
+function mostrarAvisoTicket_(url) {
+  var prev = document.getElementById('ticketAviso');
+  if (prev) prev.parentNode.removeChild(prev);
+  var el = document.createElement('div');
+  el.id = 'ticketAviso';
+  el.className = 'ticket-aviso';
+  el.innerHTML = '<div class="ticket-aviso-card"><div class="ticket-aviso-ic">✅</div>' +
+    '<b>¡Reserva enviada!</b><p>Último paso: mandá el ticket de tu reserva por WhatsApp al organizador.</p>' +
+    '<a class="ticket-aviso-btn" href="' + esc_(url) + '" target="_blank" rel="noopener">Enviar ticket por WhatsApp</a></div>';
+  document.body.appendChild(el);
+  el.querySelector('a').addEventListener('click', function () {
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+  });
 }
 
 function reservarPintarExito_(datos) {
@@ -1386,7 +1447,7 @@ function reservarPintarExito_(datos) {
     cargarReservaGestion_(datos.tokenGestion);
   };
   var linkWa = document.getElementById('rsvWhatsappLink');
-  linkWa.href = 'https://wa.me/' + CONFIG_LIGA_.whatsapp + '?text=' + encodeURIComponent(construirMensajeWhatsapp_(datos));
+  linkWa.href = urlTicketWhatsapp_(datos);
 
   // La disponibilidad y la lista de cruces de esta categoría acaban de
   // cambiar de verdad (este turno ya no está libre) -- se invalida el

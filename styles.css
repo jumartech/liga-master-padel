@@ -743,3 +743,11 @@ h1,h2{margin:0;font-family:'Barlow Condensed',sans-serif}
 .pos-alcance{font-size:.78rem;color:var(--text-dim);margin:-2px 0 10px}
 .pos-alcance[hidden],.standings-head[hidden]{display:none}
 @media (hover:hover) and (pointer:fine){ .fecha-chips{flex-wrap:wrap;overflow:visible} }
+
+/* Aviso para mandar el ticket por WhatsApp (si el navegador no abrió la pestaña) */
+.ticket-aviso{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.72);backdrop-filter:blur(4px)}
+.ticket-aviso-card{width:100%;max-width:360px;background:var(--bg-soft);border:1px solid var(--border-strong);border-radius:var(--radius-lg);padding:24px 20px;text-align:center;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-card)}
+.ticket-aviso-ic{font-size:40px}
+.ticket-aviso-card b{font-size:1.15rem}
+.ticket-aviso-card p{margin:0 0 6px;color:var(--text-dim);font-size:.92rem}
+.ticket-aviso-btn{display:block;padding:14px 16px;border-radius:999px;background:#25d366;color:#06240f;font-weight:800;text-decoration:none;font-size:1rem}
