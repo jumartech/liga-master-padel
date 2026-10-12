@@ -399,7 +399,7 @@ function admCardReserva_(r) {
     acciones.push('<button class="adm-btn sm danger" data-adm-rsv-accion="rechazar" data-id="' + id + '">Rechazar</button>');
     acciones.push('<button class="adm-btn sm ok" data-adm-rsv-accion="aprobar" data-id="' + id + '">Aprobar</button>');
   }
-  if (activa && !pend && r.montoPagado < r.valorTotal) acciones.push('<button class="adm-btn sm primary" data-adm-rsv-cobrar="' + id + '">Cobró el saldo</button>');
+  if (activa || (r.pagos && r.pagos.length)) acciones.push('<button class="adm-btn sm' + (activa && !pend && r.montoPagado < r.valorTotal ? ' primary' : '') + '" data-adm-rsv-pagos="' + id + '">Pagos</button>');
   if (activa) acciones.push('<button class="adm-btn sm" data-adm-rsv-editar="' + id + '">Editar</button>');
   var sinRes = admSinResultado_(r);
   if (r.estadoReserva === 'RESERVADO' || pend || (r.estadoReserva === 'FINALIZADO' && !r.partidoJugado)) {
@@ -420,6 +420,7 @@ function admCardReserva_(r) {
     '<div class="adm-kv"><span>' + (r.idPartido ? 'Partido ' + esc_(r.idPartido) : 'Reserva') + '</span><b>' + esc_(r.idReserva) + ' · ' + esc_(r.codigoReserva) + '</b></div>' +
     '<div class="adm-kv"><span>Reservó</span><b>' + esc_(r.nombreSolicitante || '—') + (r.telefonoSolicitante ? ' · ' + esc_(r.telefonoSolicitante) : '') + '</b></div>' +
     '<div class="adm-kv"><span>Pagado</span><b>' + formatearMonto_(r.montoPagado) + ' de ' + formatearMonto_(r.valorTotal) + '</b></div>' +
+    admResumenPagos_(r) +
     (r.notas ? '<div class="adm-kv"><span>Notas</span><b>' + esc_(r.notas) + '</b></div>' : '') +
     '<div class="adm-actions">' + acciones.join('') + '</div></div>';
 }
@@ -429,7 +430,7 @@ function admBuscarReservaEnLista_(id) {
 function admModalReserva_(r) {
   var m = admModal_('Reserva ' + r.idReserva, '<div class="adm-list">' + admCardReserva_(r) + '</div>');
   m.el.addEventListener('click', function (e) {
-    if (e.target.closest('[data-adm-rsv-accion],[data-adm-rsv-editar],[data-adm-rsv-cobrar],[data-adm-rsv-comp]')) {
+    if (e.target.closest('[data-adm-rsv-accion],[data-adm-rsv-editar],[data-adm-rsv-pagos],[data-adm-rsv-comp]')) {
       ADM.rsvLista = [r];
       setTimeout(function () { if (!e.target.closest('[data-adm-rsv-comp]')) m.cerrar(); }, 0);
     }
@@ -476,13 +477,9 @@ document.addEventListener('click', function (e) {
     });
     return;
   }
-  if ((t = e.target.closest('[data-adm-rsv-cobrar]'))) {
-    var idc = t.getAttribute('data-adm-rsv-cobrar');
-    var rc = admBuscarReservaEnLista_(idc);
-    admConBoton_(t, '…', admRpc_('admin_reserva_pago', { p_id: idc, p_monto_pagado: rc ? rc.valorTotal : 0 })).then(function (nueva) {
-      admToast_('Pago completo registrado', 'ok');
-      admReemplazarCard_(nueva);
-    }).catch(admErr_);
+  if ((t = e.target.closest('[data-adm-rsv-pagos]'))) {
+    var rp = admBuscarReservaEnLista_(t.getAttribute('data-adm-rsv-pagos'));
+    if (rp) admModalPagos_(rp);
     return;
   }
   if ((t = e.target.closest('[data-adm-rsv-comp]'))) {
@@ -505,6 +502,140 @@ document.addEventListener('click', function (e) {
   }
   if (e.target.closest('[data-adm-rsv-nueva]')) { admFormReserva_(null); }
 });
+// ============================================================
+// PAGOS: quién pagó (pareja / jugador) y cuánto
+// ============================================================
+function admNombreCorto_(nombre) {
+  return String(nombre || '').split('/').map(function (x) { return x.trim().split(/\s+/)[0]; }).filter(Boolean).join(' / ');
+}
+function admEstadoPagos_(r) {
+  var pagos = r.pagos || [];
+  var porLado = { A: 0, B: 0, '': 0 };
+  pagos.forEach(function (p) { porLado[p.lado || ''] = (porLado[p.lado || ''] || 0) + p.monto; });
+  var mitad = Math.round((r.valorTotal || 0) / 2);
+  return { A: porLado.A, B: porLado.B, sinAsignar: porLado[''], mitad: mitad, conParejas: !!(r.parejaA && r.parejaB) };
+}
+function admLineaPareja_(nombre, pagado, mitad) {
+  var estado;
+  if (pagado === mitad) estado = '<span class="adm-pago-ok">pagó su parte</span>';
+  else if (pagado > mitad) estado = '<span class="adm-pago-mas">puso ' + formatearMonto_(pagado - mitad) + ' de más</span>';
+  else estado = '<span class="adm-pago-debe">debe ' + formatearMonto_(mitad - pagado) + '</span>';
+  return '<div class="adm-pago-linea"><span class="adm-pago-nom">' + esc_(nombre) + '</span><b>' + formatearMonto_(pagado) + '</b>' + estado + '</div>';
+}
+function admResumenPagos_(r) {
+  if (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO') return '';
+  var e = admEstadoPagos_(r);
+  if (!e.conParejas) return '';
+  var html = admLineaPareja_(admNombreCorto_(r.parejaA), e.A, e.mitad) + admLineaPareja_(admNombreCorto_(r.parejaB), e.B, e.mitad);
+  if (e.sinAsignar) html += '<div class="adm-pago-linea"><span class="adm-pago-nom">Sin asignar</span><b>' + formatearMonto_(e.sinAsignar) + '</b><span class="adm-pago-sin">indicá quién pagó</span></div>';
+  return '<div class="adm-pagos-box">' + html + '</div>';
+}
+// Opciones de "¿Quién pagó?": valor "LADO|nombre".
+function admOpcionesPagador_(r) {
+  var html = '';
+  [['A', r.parejaA, r.jugadoresA], ['B', r.parejaB, r.jugadoresB]].forEach(function (x) {
+    if (!x[1]) return;
+    html += '<optgroup label="' + esc_(x[1]) + '">' +
+      '<option value="' + x[0] + '|">La pareja (sin especificar quién)</option>' +
+      (x[2] || []).map(function (j) { return '<option value="' + x[0] + '|' + esc_(j) + '">' + esc_(j) + '</option>'; }).join('') +
+      '</optgroup>';
+  });
+  html += '<option value="|">' + (r.parejaA ? 'Otro / sin asignar' : 'Quien reservó / otro') + '</option>';
+  return html;
+}
+function admModalPagos_(r) {
+  var m = admModal_('Pagos · ' + r.idReserva, '<div data-pagos-cuerpo></div>');
+  var editando = null; // pago que se está corrigiendo (o null = pago nuevo)
+  function sugerido(lado) {
+    var e = admEstadoPagos_(r), saldo = Math.max((r.valorTotal || 0) - (r.montoPagado || 0), 0);
+    if (lado === 'A' || lado === 'B') return Math.max(Math.min(e.mitad - e[lado], saldo), 0) || saldo;
+    return saldo;
+  }
+  function pintar() {
+    var e = admEstadoPagos_(r);
+    var saldo = Math.max((r.valorTotal || 0) - (r.montoPagado || 0), 0);
+    var lista = (r.pagos || []).map(function (p) {
+      var quien = p.pagador || (p.lado === 'A' ? r.parejaA : p.lado === 'B' ? r.parejaB : '');
+      var lado = p.lado === 'A' ? admNombreCorto_(r.parejaA) : p.lado === 'B' ? admNombreCorto_(r.parejaB) : 'Sin asignar';
+      return '<div class="adm-pago-item' + (p.lado ? '' : ' sin') + '">' +
+        '<div class="adm-pago-item-l"><b>' + formatearMonto_(p.monto) + '</b><span>' + esc_(quien || '—') + (p.lado && p.pagador ? ' · ' + esc_(lado) : (!p.lado ? ' · <i>sin asignar</i>' : '')) + '</span>' +
+        '<small>' + esc_(p.fecha) + (p.nota ? ' · ' + esc_(p.nota) : '') + '</small></div>' +
+        '<div class="adm-pago-item-r"><button class="adm-btn sm" data-pago-editar="' + p.id + '">' + (p.lado ? 'Corregir' : 'Asignar') + '</button>' +
+        '<button class="adm-btn sm danger" data-pago-borrar="' + p.id + '" aria-label="Borrar pago">×</button></div></div>';
+    }).join('');
+    var ladoSel = editando ? (editando.lado || '') + '|' + (editando.pagador || '') : (e.conParejas ? (e.A <= e.B ? 'A|' : 'B|') : '|');
+    var montoSel = editando ? editando.monto : sugerido(ladoSel.split('|')[0]);
+    var rapidos = '';
+    if (!editando && e.conParejas && saldo > 0) {
+      ['A', 'B'].forEach(function (l) {
+        var falta = Math.min(e.mitad - e[l], saldo);
+        if (falta > 0) rapidos += '<button class="adm-btn sm" data-pago-rapido="' + l + '" data-monto="' + falta + '">' + esc_(admNombreCorto_(l === 'A' ? r.parejaA : r.parejaB)) + ' pagó su parte (' + formatearMonto_(falta) + ')</button>';
+      });
+    }
+    m.el.querySelector('[data-pagos-cuerpo]').innerHTML =
+      '<p class="adm-help" style="margin:0">' + (r.parejaA ? esc_(r.parejaA) + ' <i class="adm-faint">vs</i> ' + esc_(r.parejaB) : 'Turno libre') + '</p>' +
+      '<div class="adm-pagos-tot"><div><small>Total del turno</small><b>' + formatearMonto_(r.valorTotal) + '</b></div>' +
+        '<div><small>Pagado</small><b>' + formatearMonto_(r.montoPagado) + '</b></div>' +
+        '<div><small>Falta</small><b class="' + (saldo ? 'falta' : 'ok') + '">' + formatearMonto_(saldo) + '</b></div></div>' +
+      admResumenPagos_(r) +
+      '<h3 class="adm-h3">Pagos registrados</h3>' +
+      (lista || '<div class="adm-faint">Todavía no hay pagos.</div>') +
+      '<div class="adm-form adm-pago-form">' +
+        '<h3 class="adm-h3">' + (editando ? (editando.lado ? 'Corregir pago' : 'Asignar pago de ' + formatearMonto_(editando.monto)) : 'Registrar un pago') + '</h3>' +
+        (rapidos ? '<div class="adm-actions">' + rapidos + '</div>' : '') +
+        '<label class="adm-field"><span>¿Quién pagó?</span><select class="adm-select" name="quien">' + admOpcionesPagador_(r) + '</select></label>' +
+        '<div class="adm-grid2">' +
+          '<label class="adm-field"><span>Monto</span><input class="adm-input" type="number" inputmode="numeric" min="1" name="monto" value="' + esc_(montoSel || '') + '"></label>' +
+          '<label class="adm-field"><span>Nota (opcional)</span><input class="adm-input" name="nota" placeholder="Efectivo, transferencia…" value="' + esc_(editando ? editando.nota : '') + '"></label>' +
+        '</div>' +
+        '<p class="adm-error" data-err hidden></p>' +
+        '<div class="adm-actions end">' + (editando ? '<button class="adm-btn ghost" data-pago-cancelar>Cancelar</button>' : '') +
+          '<button class="adm-btn primary" data-pago-guardar>' + (editando ? 'Guardar' : 'Registrar pago') + '</button></div>' +
+      '</div>';
+    var sel = m.el.querySelector('[name=quien]');
+    sel.value = ladoSel;
+    if (sel.value !== ladoSel) sel.value = ladoSel.split('|')[0] + '|';
+    if (!editando) sel.addEventListener('change', function () { m.el.querySelector('[name=monto]').value = sugerido(sel.value.split('|')[0]) || ''; });
+  }
+  function guardar(lado, pagador, monto, nota, btn) {
+    var errEl = m.el.querySelector('[data-err]');
+    errEl.hidden = true;
+    admConBoton_(btn, '…', admRpc_('admin_pago_guardar', {
+      p_reserva: r.idReserva, p_id_pago: editando ? editando.id : null, p_lado: lado, p_pagador: pagador, p_monto: monto, p_nota: nota,
+    })).then(function (nueva) {
+      r = nueva; editando = null; pintar(); admReemplazarCard_(nueva);
+      admToast_('Pago guardado', 'ok');
+    }).catch(function (err) { errEl.hidden = false; errEl.textContent = err.message; });
+  }
+  m.el.addEventListener('click', function (ev) {
+    var b;
+    if ((b = ev.target.closest('[data-pago-guardar]'))) {
+      var q = m.el.querySelector('[name=quien]').value.split('|');
+      var monto = Number(m.el.querySelector('[name=monto]').value || 0);
+      guardar(q[0], q.slice(1).join('|'), monto, m.el.querySelector('[name=nota]').value, b);
+    } else if ((b = ev.target.closest('[data-pago-rapido]'))) {
+      guardar(b.getAttribute('data-pago-rapido'), '', Number(b.getAttribute('data-monto')), '', b);
+    } else if ((b = ev.target.closest('[data-pago-editar]'))) {
+      var idp = Number(b.getAttribute('data-pago-editar'));
+      editando = (r.pagos || []).filter(function (p) { return p.id === idp; })[0] || null;
+      pintar();
+      var f = m.el.querySelector('.adm-pago-form'); if (f) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else if (ev.target.closest('[data-pago-cancelar]')) {
+      editando = null; pintar();
+    } else if ((b = ev.target.closest('[data-pago-borrar]'))) {
+      var idb = Number(b.getAttribute('data-pago-borrar'));
+      var pg = (r.pagos || []).filter(function (p) { return p.id === idb; })[0];
+      admConfirmar_('Se borra el pago de ' + formatearMonto_(pg ? pg.monto : 0) + (pg && pg.pagador ? ' de ' + pg.pagador : '') + '.', { ok: 'Borrar pago', peligro: true, titulo: 'Borrar pago' }).then(function (si) {
+        if (!si) return;
+        admRpc_('admin_pago_borrar', { p_reserva: r.idReserva, p_id_pago: idb }).then(function (nueva) {
+          r = nueva; editando = null; pintar(); admReemplazarCard_(nueva);
+          admToast_('Pago borrado', 'ok');
+        }).catch(admErr_);
+      });
+    }
+  });
+  pintar();
+}
 function admReemplazarCard_(r) {
   var lista = ADM.rsvLista || [];
   for (var i = 0; i < lista.length; i++) if (lista[i].idReserva === r.idReserva) lista[i] = r;
@@ -543,7 +674,8 @@ function admFormReserva_(r) {
       '<label class="adm-field"><span>Nombre de quien reserva</span><input class="adm-input" name="nombre" value="' + esc_(r.nombreSolicitante || '') + '"></label>' +
       '<label class="adm-field"><span>Teléfono</span><input class="adm-input" type="tel" name="telefono" value="' + esc_(r.telefonoSolicitante || '') + '"></label>' +
       '<label class="adm-field"><span>Valor total</span><input class="adm-input" type="number" inputmode="numeric" name="total" value="' + esc_(r.valorTotal !== undefined ? r.valorTotal : (CONFIG_LIGA_.valorTotal || 0)) + '"></label>' +
-      '<label class="adm-field"><span>Pagado</span><input class="adm-input" type="number" inputmode="numeric" name="pagado" value="' + esc_(r.montoPagado !== undefined ? r.montoPagado : 0) + '"></label>' +
+      (nueva ? '<label class="adm-field"><span>Ya pagado</span><input class="adm-input" type="number" inputmode="numeric" name="pagado" value="0"></label>'
+             : '<div class="adm-field"><span>Pagado</span><div class="adm-help" style="margin:0">' + formatearMonto_(r.montoPagado || 0) + ' · se cambia en "Pagos"</div></div>') +
     '</div>' +
     '<label class="adm-field"><span>Notas (solo las ves vos)</span><input class="adm-input" name="notas" value="' + esc_(r.notas || '') + '"></label>' +
     '<p class="adm-error" data-err hidden></p>' +

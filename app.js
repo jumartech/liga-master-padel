@@ -294,8 +294,7 @@ function mostrarCartelElegirCategoria_(pantalla) {
   var cartel = '<div class="elegir-cat-card"><b>Seleccioná tu categoría</b><span>Para ver ' +
     ({ posiciones: 'la tabla de posiciones', fixture: 'el fixture', resultados: 'los resultados' }[pantalla] || 'esta sección') +
     ' primero elegí tu categoría en Inicio.</span><button type="button" class="btn-elegir-cat" data-go="inicio">Elegir categoría</button></div>';
-  ['posFechas', 'fixFechas', 'resFechas'].forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
-  var alc = document.getElementById('posAlcance'); if (alc) alc.hidden = true;
+  ['fixFechas', 'resFechas'].forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
   var head = document.getElementById('posHead'); if (head) head.hidden = true;
   var hint = document.querySelector('#screen-posiciones .hint-line'); if (hint) hint.hidden = true;
   if (pantalla === 'posiciones') document.getElementById('posRows').innerHTML = cartel;
@@ -319,7 +318,7 @@ function fechasUnicas_(lista) {
   lista.forEach(function (n) { n = Number(n); if (n && !vistos[n]) { vistos[n] = 1; out.push(n); } });
   return out.sort(function (a, b) { return a - b; });
 }
-var fechaPosPorCategoria = {}, fechaResPorCategoria = {};
+var fechaResPorCategoria = {};
 function elegirCategoria_(cat) {
   if (!cat) return;
   var cambioReal = (categoriaActual !== cat);
@@ -564,18 +563,7 @@ function renderPosiciones_(datos) {
   var cont = document.getElementById('posRows');
   document.getElementById('posHead').hidden = false;
   var hint = document.querySelector('#screen-posiciones .hint-line'); if (hint) hint.hidden = false;
-  var partidos = datos.partidos || [];
-  var fechas = fechasUnicas_(partidos.map(function (p) { return p.f; }));
-  var sel = fechaPosPorCategoria[categoriaActual] || 0;
-  if (sel && fechas.indexOf(sel) < 0) sel = fechaPosPorCategoria[categoriaActual] = 0;
-  pintarChipsFecha_('posFechas', fechas, sel, 'General', 'data-pos-fecha');
-  var alc = document.getElementById('posAlcance');
-  alc.hidden = !sel;
-  alc.textContent = sel ? 'Tabla con los partidos jugados hasta la Fecha ' + sel + ' inclusive.' : '';
-  var filas = calcularPosiciones_({
-    parejas: datos.parejas || [],
-    partidos: sel ? partidos.filter(function (p) { return Number(p.f) <= sel; }) : partidos,
-  });
+  var filas = calcularPosiciones_(datos);
   if (!filas.length) { cont.innerHTML = '<p class="state-empty">Todavía no hay parejas activas en esta categoría.</p>'; return; }
   cont.innerHTML = filas.map(function (f, i) {
     var rankClass = i === 0 ? ' g1' : i === 1 ? ' g2' : i === 2 ? ' g3' : '';
@@ -595,13 +583,7 @@ function renderPosiciones_(datos) {
   }).join('');
 }
 document.addEventListener('click', function (e) {
-  var el = e.target.closest('[data-pos-fecha]');
-  if (el) {
-    fechaPosPorCategoria[categoriaActual] = Number(el.getAttribute('data-pos-fecha'));
-    var d = cache_['pos|' + categoriaActual]; if (d) renderPosiciones_(d);
-    return;
-  }
-  el = e.target.closest('[data-res-fecha]');
+  var el = e.target.closest('[data-res-fecha]');
   if (el) {
     fechaResPorCategoria[categoriaActual] = Number(el.getAttribute('data-res-fecha'));
     var r = cache_['res|' + categoriaActual]; if (r) renderResultados_(r);

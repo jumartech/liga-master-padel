@@ -152,3 +152,22 @@
 .adm-rsv-cat{font-size:.74rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--gold-light);margin-bottom:6px}
 .adm-rsv-aviso{font-size:.8rem;line-height:1.35;color:#ffcf8a;background:rgba(255,182,72,.1);border:1px solid rgba(255,182,72,.3);border-radius:10px;padding:8px 10px;margin-bottom:8px}
 .adm-rsv-aviso.gris{color:var(--text-dim);background:var(--surface);border-color:var(--border)}
+
+/* Pagos por pareja */
+.adm-h3{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin:16px 0 8px}
+.adm-pagos-box{display:flex;flex-direction:column;gap:4px;margin:6px 0 2px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.adm-pago-linea{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;font-size:.8rem}
+.adm-pago-nom{color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adm-pago-linea b{font-weight:700;text-align:right}
+.adm-pago-linea>span:last-child{font-size:.72rem;font-weight:700;text-align:right;min-width:92px}
+.adm-pago-ok{color:#5fd38a}.adm-pago-debe{color:var(--gold-light)}.adm-pago-mas{color:#7fb6ff}.adm-pago-sin{color:#ffcf8a}
+.adm-pagos-tot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.adm-pagos-tot>div{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.adm-pagos-tot small{font-size:.68rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em}
+.adm-pagos-tot b{font-size:1rem}.adm-pagos-tot b.falta{color:var(--gold-light)}.adm-pagos-tot b.ok{color:#5fd38a}
+.adm-pago-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:6px}
+.adm-pago-item.sin{border-color:rgba(255,182,72,.4)}
+.adm-pago-item-l{display:flex;flex-direction:column;gap:1px;min-width:0}
+.adm-pago-item-l span{font-size:.82rem;color:var(--text)}.adm-pago-item-l small{font-size:.72rem;color:var(--text-faint)}
+.adm-pago-item-r{display:flex;gap:6px;flex-shrink:0}
+.adm-pago-form{margin-top:8px;padding-top:4px;border-top:1px solid var(--border)}
