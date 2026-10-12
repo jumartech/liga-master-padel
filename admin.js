@@ -350,7 +350,7 @@ document.addEventListener('click', function (e) {
 // ============================================================
 // RESERVAS
 // ============================================================
-var ADM_FILTROS_RSV_ = [['pendientes', 'Para aprobar'], ['proximas', 'Próximas'], ['saldo', 'Con saldo'], ['sinresultado', 'Sin resultado'], ['pasadas', 'Pasadas'], ['todas', 'Todas']];
+var ADM_FILTROS_RSV_ = [['pendientes', 'Para aprobar'], ['proximas', 'Próximas'], ['saldo', 'Con saldo'], ['sinresultado', 'Sin resultado'], ['completas', 'Completas'], ['pasadas', 'Pasadas'], ['todas', 'Todas']];
 function admVistaReservas_() {
   var v = admView_();
   v.innerHTML = '<div class="adm-head"><h1 class="adm-h1">Reservas</h1><button class="adm-btn primary sm" data-adm-rsv-nueva>+ Cargar reserva</button></div>' +
@@ -368,7 +368,7 @@ function admCargarReservas_() {
     ADM.rsvLista = lista;
     if (ADM.rsvFiltro === 'pendientes') admActualizarBadge_(lista.length);
     if (!lista.length) {
-      cont.innerHTML = '<div class="adm-empty">' + (ADM.rsvFiltro === 'pendientes' ? 'No hay reservas esperando aprobación.' : ADM.rsvFiltro === 'sinresultado' ? 'No hay partidos pasados sin resultado.' : 'No hay reservas para mostrar.') + '</div>';
+      cont.innerHTML = '<div class="adm-empty">' + (ADM.rsvFiltro === 'pendientes' ? 'No hay reservas esperando aprobación.' : ADM.rsvFiltro === 'sinresultado' ? 'No hay partidos pasados sin resultado.' : ADM.rsvFiltro === 'completas' ? 'Todavía no hay reservas completas (pagadas y con resultado cargado).' : 'No hay reservas para mostrar.') + '</div>';
       return;
     }
     cont.innerHTML = lista.slice(0, 200).map(admCardReserva_).join('') +
@@ -388,6 +388,10 @@ function admSinResultado_(r) {
 // La reserva apunta a un partido que ya no está en el fixture (se rearmó).
 function admPartidoBorrado_(r) {
   return !!r.idPartido && r.partidoExiste === false && (r.estadoReserva === 'FINALIZADO' || r.estadoReserva === 'RESERVADO' || r.estadoReserva === 'PENDIENTE_APROBACION');
+}
+// Pagada del todo (sin importar qué pareja puso la plata) y con resultado cargado.
+function admCompleta_(r) {
+  return (r.estadoReserva === 'FINALIZADO' || r.estadoReserva === 'RESERVADO') && !!r.idPartido && !!r.partidoJugado && r.montoPagado >= r.valorTotal;
 }
 function admCardReserva_(r) {
   var id = esc_(r.idReserva);
@@ -410,12 +414,12 @@ function admCardReserva_(r) {
   if (wa) acciones.push('<a class="adm-btn sm wa" href="' + esc_(wa) + '" target="_blank" rel="noopener">WhatsApp</a>');
 
   return '<div class="adm-card' + (pend || sinRes ? ' warn' : '') + (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO' ? ' off' : '') + '" data-adm-card="' + id + '">' +
-    '<div class="adm-rsv-cat">' + esc_(admCatFecha_(r)) + '</div>' +
+    '<div class="adm-rsv-cat">' + esc_(admCatFecha_(r)) + (admCompleta_(r) ? ' · <span class="adm-rsv-ok">Pagada y con resultado</span>' : '') + '</div>' +
     (admPartidoBorrado_(r) ? '<div class="adm-rsv-aviso gris">El partido ' + esc_(r.idPartido) + ' de esta reserva ya no está en el fixture (el fixture se rearmó). La reserva queda como registro; si querés, cancelala.</div>' : '') +
     (sinRes ? '<div class="adm-rsv-aviso">Ya pasó y no tiene resultado cargado. Si no se jugó (lluvia, etc.), cancelala y el partido vuelve a quedar disponible para reservar.</div>' : '') +
     '<div class="adm-row wrap"><div class="adm-row-l"><b>' + esc_(admFecha_(r.fecha, r.diaSemana)) + ' · ' + esc_(r.horarioInicio) + '-' + esc_(r.horarioFin) + '</b>' +
       '<span class="adm-muted">Cancha ' + esc_(r.cancha || '?') + '</span></div>' +
-      '<div class="adm-row-l">' + admPill_(r.estadoReserva) + admPagoPill_(r) + '</div></div>' +
+      '<div class="adm-row-l">' + (admCompleta_(r) ? '<span class="adm-pill ok">✓ Completa</span>' : admPill_(r.estadoReserva) + admPagoPill_(r)) + '</div></div>' +
     (r.parejaA ? '<div class="adm-vs">' + esc_(r.parejaA) + '<i>vs</i>' + esc_(r.parejaB) + '</div>' : '') +
     '<div class="adm-kv"><span>' + (r.idPartido ? 'Partido ' + esc_(r.idPartido) : 'Reserva') + '</span><b>' + esc_(r.idReserva) + ' · ' + esc_(r.codigoReserva) + '</b></div>' +
     '<div class="adm-kv"><span>Reservó</span><b>' + esc_(r.nombreSolicitante || '—') + (r.telefonoSolicitante ? ' · ' + esc_(r.telefonoSolicitante) : '') + '</b></div>' +
@@ -460,7 +464,7 @@ document.addEventListener('click', function (e) {
       aprobar: null,
       rechazar: ['Se rechaza la solicitud y el horario y el cruce quedan libres de nuevo. Acordate de avisarle por WhatsApp.', 'Rechazar'],
       cancelar: yaPaso
-        ? ['Se cancela la reserva' + (r.idPartido && r.partidoExiste !== false ? ' y el partido ' + (r.parejaA ? r.parejaA + ' vs ' + r.parejaB + ' ' : '') + 'vuelve a quedar disponible para que lo reserven otro día' : '') + '. La plata que pagaron no se mueve sola: si la pasan a la nueva reserva, cargala ahí con "Editar".', 'Cancelar reserva']
+        ? ['Se cancela la reserva' + (r.idPartido && r.partidoExiste !== false ? ' y el partido ' + (r.parejaA ? r.parejaA + ' vs ' + r.parejaB + ' ' : '') + 'vuelve a quedar disponible para que lo reserven otro día' : '') + '. Los jugadores lo vuelven a reservar desde la web como siempre (eligen día y suben comprobante). Lo que ya pagaron queda registrado en esta reserva; si se lo tomás a cuenta, cargalo en la nueva con "Pagos".', 'Cancelar reserva']
         : ['Se cancela la reserva y el horario queda libre. La seña no se devuelve automáticamente.', 'Cancelar reserva'],
       reactivar: ['La reserva vuelve a quedar activa (aprobada), si la cancha sigue libre.', 'Reactivar'],
     }[accion];
@@ -515,10 +519,11 @@ function admEstadoPagos_(r) {
   var mitad = Math.round((r.valorTotal || 0) / 2);
   return { A: porLado.A, B: porLado.B, sinAsignar: porLado[''], mitad: mitad, conParejas: !!(r.parejaA && r.parejaB) };
 }
-function admLineaPareja_(nombre, pagado, mitad) {
+function admLineaPareja_(nombre, pagado, mitad, turnoPago) {
   var estado;
   if (pagado === mitad) estado = '<span class="adm-pago-ok">pagó su parte</span>';
-  else if (pagado > mitad) estado = '<span class="adm-pago-mas">puso ' + formatearMonto_(pagado - mitad) + ' de más</span>';
+  else if (pagado > mitad) estado = '<span class="adm-pago-mas">' + (turnoPago ? 'pagó ' + formatearMonto_(pagado - mitad) + ' por la otra' : 'puso ' + formatearMonto_(pagado - mitad) + ' de más') + '</span>';
+  else if (turnoPago) estado = '<span class="adm-pago-ok">cubierto por la otra</span>';
   else estado = '<span class="adm-pago-debe">debe ' + formatearMonto_(mitad - pagado) + '</span>';
   return '<div class="adm-pago-linea"><span class="adm-pago-nom">' + esc_(nombre) + '</span><b>' + formatearMonto_(pagado) + '</b>' + estado + '</div>';
 }
@@ -526,7 +531,8 @@ function admResumenPagos_(r) {
   if (r.estadoReserva === 'CANCELADO' || r.estadoReserva === 'RECHAZADO') return '';
   var e = admEstadoPagos_(r);
   if (!e.conParejas) return '';
-  var html = admLineaPareja_(admNombreCorto_(r.parejaA), e.A, e.mitad) + admLineaPareja_(admNombreCorto_(r.parejaB), e.B, e.mitad);
+  var pago = r.montoPagado >= r.valorTotal;
+  var html = admLineaPareja_(admNombreCorto_(r.parejaA), e.A, e.mitad, pago) + admLineaPareja_(admNombreCorto_(r.parejaB), e.B, e.mitad, pago);
   if (e.sinAsignar) html += '<div class="adm-pago-linea"><span class="adm-pago-nom">Sin asignar</span><b>' + formatearMonto_(e.sinAsignar) + '</b><span class="adm-pago-sin">indicá quién pagó</span></div>';
   return '<div class="adm-pagos-box">' + html + '</div>';
 }
